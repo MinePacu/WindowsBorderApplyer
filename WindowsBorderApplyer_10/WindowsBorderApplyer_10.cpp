@@ -156,9 +156,16 @@ static void printWindowHandles(std::unordered_set<HWND>& modifiedWindows, COLORR
             ++it;
         }
     }
+    
+    // 창 제목을 동적으로 변경
+    std::wstring newTitle = L"WindowBorderApplyer - " + std::to_wstring(windowHandles.size()) + L" windows collected";
+    SetConsoleTitle(newTitle.c_str());
 }
 
 int main(int argc, char* argv[]) {
+    // 콘솔 창 제목 설정
+    SetConsoleTitle(L"WindowBorderApplyer");
+
     // 관리자 권한으로 실행 중인지 확인
     if (!IsRunAsAdmin()) {
         RestartAsAdmin();
