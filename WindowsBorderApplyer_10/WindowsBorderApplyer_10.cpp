@@ -3,14 +3,16 @@
 #include <thread>
 #include <Windows.h>
 #include <chrono>
-#include <unordered_set>
+#include <set>
 #include <dwmapi.h> // DwmSetWindowAttribute 함수를 사용하기 위해 추가
 #include <fstream> // 파일 입출력을 위해 추가
 #include <iomanip> // std::put_time을 사용하기 위해 추가
 #include <ctime> // std::localtime_s을 사용하기 위해 추가
 #include <mutex> // std::mutex를 사용하기 위해 추가
 #include <filesystem> // 파일 시스템 작업을 위해 추가
+#include <Psapi.h> // GetModuleFileNameEx 함수를 사용하기 위해 추가
 
+#pragma comment(lib, "Psapi.lib") // Psapi.lib 라이브러리 링크
 #pragma comment(lib, "Dwmapi.lib") // Dwmapi.lib 라이브러리 링크
 
 std::mutex logMutex; // 로그 파일 접근을 위한 뮤텍스
@@ -114,16 +116,33 @@ static void logMessage(LogLevel level, const std::wstring& message, const char* 
 
 #define LOG_ERROR(message) logMessage(LOG_ERROR, message, __FUNCTION__, __LINE__)
 
+// 프로세스 이름을 가져오는 함수
+static std::wstring getProcessName(HWND hwnd) {
+    DWORD processId;
+    GetWindowThreadProcessId(hwnd, &processId);
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
+    if (hProcess) {
+        wchar_t processName[MAX_PATH] = L"<unknown>";
+        if (GetModuleFileNameEx(hProcess, NULL, processName, MAX_PATH)) {
+            CloseHandle(hProcess);
+            return std::wstring(processName);
+        }
+        CloseHandle(hProcess);
+    }
+    return L"<unknown>";
+}
+
 static void setWindowBorderColor(HWND hwnd, COLORREF color) {
     HRESULT hr = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &color, sizeof(color));
     if (FAILED(hr)) {
-        std::wstring errorMessage = L"Failed to set window border color for HWND: " + std::to_wstring(reinterpret_cast<uintptr_t>(hwnd)) + L" with error code: " + std::to_wstring(hr);
+        std::wstring processName = getProcessName(hwnd);
+        std::wstring errorMessage = L"Failed to set window border color for HWND: " + std::to_wstring(reinterpret_cast<uintptr_t>(hwnd)) + L" (Process: " + processName + L") with error code: " + std::to_wstring(hr);
         std::wcerr << errorMessage << std::endl;
         LOG_ERROR(errorMessage);
     }
 }
 
-static void printWindowHandles(std::unordered_set<HWND>& modifiedWindows, COLORREF color) {
+static void printWindowHandles(std::set<HWND>& modifiedWindows, COLORREF color) {
     // 창 핸들러 수집
     auto windowHandles = collectWindowHandles();
 
@@ -156,7 +175,7 @@ static void printWindowHandles(std::unordered_set<HWND>& modifiedWindows, COLORR
             ++it;
         }
     }
-    
+
     // 창 제목을 동적으로 변경
     std::wstring newTitle = L"WindowBorderApplyer - " + std::to_wstring(windowHandles.size()) + L" windows collected";
     SetConsoleTitle(newTitle.c_str());
@@ -190,18 +209,19 @@ int main(int argc, char* argv[]) {
     std::wcout << L"Press Ctrl+C to exit..." << std::endl;
 
     // 이미 색깔을 변경한 창 핸들러를 추적하기 위한 집합
-    std::unordered_set<HWND> modifiedWindows;
+    std::set<HWND> modifiedWindows;
 
     // 주기적으로 작업을 수행하기 위한 스레드
-    std::thread worker([&modifiedWindows, color]() {
-        while (true) {
+    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    std::thread worker([&modifiedWindows, color, hEvent]() {
+        while (WaitForSingleObject(hEvent, 10000) == WAIT_TIMEOUT) { // 10초마다 창 핸들러 수집 및 출력
             printWindowHandles(modifiedWindows, color);
-            std::this_thread::sleep_for(std::chrono::seconds(10)); // 10초마다 창 핸들러 수집 및 출력
         }
         });
 
     // 메인 스레드는 종료를 기다림
     worker.join();
+    CloseHandle(hEvent);
 
     return 0;
 }
