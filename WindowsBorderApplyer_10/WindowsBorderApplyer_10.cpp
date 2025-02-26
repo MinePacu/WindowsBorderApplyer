@@ -213,6 +213,11 @@ int main(int argc, char* argv[]) {
 
     // 주기적으로 작업을 수행하기 위한 스레드
     HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (hEvent == NULL) {
+        std::wcerr << L"Failed to create event. Error code: " << GetLastError() << std::endl;
+        return 1;
+    }
+
     std::thread worker([&modifiedWindows, color, hEvent]() {
         while (WaitForSingleObject(hEvent, 10000) == WAIT_TIMEOUT) { // 10초마다 창 핸들러 수집 및 출력
             printWindowHandles(modifiedWindows, color);
@@ -221,7 +226,10 @@ int main(int argc, char* argv[]) {
 
     // 메인 스레드는 종료를 기다림
     worker.join();
-    CloseHandle(hEvent);
+
+    if (hEvent != NULL) {
+        CloseHandle(hEvent);
+    }
 
     return 0;
 }
