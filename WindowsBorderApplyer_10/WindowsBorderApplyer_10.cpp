@@ -12,6 +12,8 @@
 #include <filesystem> // 파일 시스템 작업을 위해 추가
 #include <Psapi.h> // GetModuleFileNameEx 함수를 사용하기 위해 추가
 
+#include "resource.h" // IDI_APP_ICON 정의를 포함하기 위해 추가
+
 #pragma comment(lib, "Psapi.lib") // Psapi.lib 라이브러리 링크
 #pragma comment(lib, "Dwmapi.lib") // Dwmapi.lib 라이브러리 링크
 
@@ -142,13 +144,31 @@ static void setWindowBorderColor(HWND hwnd, COLORREF color) {
     }
 }
 
+static void clearConsole() {
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    DWORD count;
+    DWORD cellCount;
+    COORD homeCoords = { 0, 0 };
+
+    if (hConsole == INVALID_HANDLE_VALUE) return;
+
+    if (!GetConsoleScreenBufferInfo(hConsole, &csbi)) return;
+    cellCount = csbi.dwSize.X * csbi.dwSize.Y;
+
+    if (!FillConsoleOutputCharacter(hConsole, (TCHAR)' ', cellCount, homeCoords, &count)) return;
+
+    if (!FillConsoleOutputAttribute(hConsole, csbi.wAttributes, cellCount, homeCoords, &count)) return;
+
+    SetConsoleCursorPosition(hConsole, homeCoords);
+}
+
 static void printWindowHandles(std::set<HWND>& modifiedWindows, COLORREF color) {
     // 창 핸들러 수집
     auto windowHandles = collectWindowHandles();
 
-    // 콘솔 커서를 맨 위로 이동
-    COORD coord = { 0, 0 };
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    // 콘솔 창을 지우고 커서를 맨 위로 이동
+    clearConsole();
 
     std::wcout << L"Collected " << windowHandles.size() << L" window handles:" << std::endl;
     for (const auto& hwnd : windowHandles) {
@@ -181,6 +201,16 @@ static void printWindowHandles(std::set<HWND>& modifiedWindows, COLORREF color) 
     SetConsoleTitle(newTitle.c_str());
 }
 
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    default:
+        return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    }
+}
+
 int main(int argc, char* argv[]) {
     // 콘솔 창 제목 설정
     SetConsoleTitle(L"WindowBorderApplyer");
@@ -190,6 +220,14 @@ int main(int argc, char* argv[]) {
         RestartAsAdmin();
         return 0;
     }
+
+    // WindowProc 함수 추가
+    WNDCLASS wc = { 0 };
+    wc.lpfnWndProc = WindowProc;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = L"WindowBorderApplyerClass";
+    wc.hIcon = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDI_ICON1)); // 아이콘 설정
+    RegisterClass(&wc);
 
     // 기본 색상은 하늘색으로 설정
     COLORREF color = RGB(135, 206, 235);

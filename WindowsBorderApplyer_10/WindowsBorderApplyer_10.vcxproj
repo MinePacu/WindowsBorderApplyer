@@ -131,6 +131,15 @@
   <ItemGroup>
     <ClCompile Include="WindowsBorderApplyer_10.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="app_icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="WindowsBorderApplyer_10.rc" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
