@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
 
-class Program
+partial class Program
 {
     private static readonly HashSet<IntPtr> windowHandles = [];
     private static readonly HashSet<IntPtr> changedHandles = []; // 이미 색깔이 변경된 창 핸들러를 추적
@@ -30,21 +30,14 @@ class Program
             throw new PlatformNotSupportedException("This method is only supported on Windows.");
         }
 
-        using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-        {
-            WindowsPrincipal principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
+        using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+        WindowsPrincipal principal = new(identity);
+        return principal.IsInRole(WindowsBuiltInRole.Administrator);
     }
 
     static void RestartAsAdmin()
     {
-        var exeName = Environment.ProcessPath;
-        if (exeName == null)
-        {
-            throw new InvalidOperationException("Unable to determine the executable path.");
-        }
-
+        var exeName = Environment.ProcessPath ?? throw new InvalidOperationException("Unable to determine the executable path.");
         var startInfo = new ProcessStartInfo(exeName)
         {
             UseShellExecute = true,
@@ -193,7 +186,7 @@ class Program
         GetWindowThreadProcessId(hWnd, out uint processId);
         try
         {
-            Process proc = Process.GetProcessById((int)processId);
+            Process proc = Process.GetProcessById(processId: (int)processId);
             return proc.ProcessName;
         }
         catch
@@ -217,8 +210,8 @@ class Program
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowThreadProcessIdA", SetLastError = true)]
+    private static partial uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
